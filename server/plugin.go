@@ -17,8 +17,10 @@ type PluginContainer interface {
 
 	DoRegister(name string, rcvr interface{}, metadata string) error
 	DoRegisterFunction(name string, fn interface{}, metadata string) error
+	DoUnregister(name string) error
 
 	DoPostConnAccept(net.Conn) (net.Conn, bool)
+	DoPostConnClose(net.Conn) bool
 
 	DoPreReadRequest(ctx context.Context) error
 	DoPostReadRequest(ctx context.Context, r *protocol.Message, e error) error
@@ -38,6 +40,7 @@ type (
 	// RegisterPlugin is .
 	RegisterPlugin interface {
 		Register(name string, rcvr interface{}, metadata string) error
+		Unregister(name string) error
 	}
 
 	// RegisterFunctionPlugin is .
@@ -50,6 +53,11 @@ type (
 	// and this conn has been closed.
 	PostConnAcceptPlugin interface {
 		HandleConnAccept(net.Conn) (net.Conn, bool)
+	}
+
+	// PostConnClosePlugin represents client connection close plugin.
+	PostConnClosePlugin interface {
+		HandleConnClose(net.Conn) bool
 	}
 
 	//PreReadRequestPlugin represents .
@@ -149,6 +157,24 @@ func (p *pluginContainer) DoRegisterFunction(name string, fn interface{}, metada
 	return nil
 }
 
+// DoUnregister invokes RegisterPlugin.
+func (p *pluginContainer) DoUnregister(name string) error {
+	var es []error
+	for _, rp := range p.plugins {
+		if plugin, ok := rp.(RegisterPlugin); ok {
+			err := plugin.Unregister(name)
+			if err != nil {
+				es = append(es, err)
+			}
+		}
+	}
+
+	if len(es) > 0 {
+		return errors.NewMultiError(es)
+	}
+	return nil
+}
+
 //DoPostConnAccept handles accepted conn
 func (p *pluginContainer) DoPostConnAccept(conn net.Conn) (net.Conn, bool) {
 	var flag bool
@@ -162,6 +188,20 @@ func (p *pluginContainer) DoPostConnAccept(conn net.Conn) (net.Conn, bool) {
 		}
 	}
 	return conn, true
+}
+
+//DoPostConnClose handles closed conn
+func (p *pluginContainer) DoPostConnClose(conn net.Conn) bool {
+	var flag bool
+	for i := range p.plugins {
+		if plugin, ok := p.plugins[i].(PostConnClosePlugin); ok {
+			flag = plugin.HandleConnClose(conn)
+			if !flag {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // DoPreReadRequest invokes PreReadRequest plugin.
