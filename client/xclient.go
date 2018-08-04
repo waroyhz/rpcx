@@ -306,6 +306,10 @@ func splitNetworkAndAddress(server string) (string, string) {
 	if len(ss) == 1 {
 		return "tcp", server
 	}
+	if index := strings.LastIndex(ss[0], "/"); index > 0 {
+		//todo waroy 最后一个分隔符后面是协议
+		return ss[0][index+1:], ss[1]
+	}
 
 	return ss[0], ss[1]
 }
