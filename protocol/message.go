@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 
 	"github.com/smallnest/rpcx/util"
@@ -82,6 +83,9 @@ const (
 	ProtoBuffer
 	// MsgPack for payload
 	MsgPack
+	// Thrift
+	// Thrift for payload
+	Thrift
 )
 
 // Message is the generic type of Request and Response.
@@ -394,7 +398,15 @@ func (m *Message) Decode(r io.Reader) error {
 	// validate rest length for each step?
 
 	// parse header
-	_, err := io.ReadFull(r, m.Header[:])
+	_, err := io.ReadFull(r, m.Header[:1])
+	if err != nil {
+		return err
+	}
+	if !m.Header.CheckMagicNumber() {
+		return fmt.Errorf("wrong magic number: %v", m.Header[0])
+	}
+
+	_, err = io.ReadFull(r, m.Header[1:])
 	if err != nil {
 		return err
 	}
