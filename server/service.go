@@ -24,18 +24,18 @@ var typeOfContext = reflect.TypeOf((*context.Context)(nil)).Elem()
 
 type methodType struct {
 	sync.Mutex // protects counters
-	method     reflect.Method
-	ArgType    reflect.Type
-	ReplyType  reflect.Type
+	method    reflect.Method
+	ArgType   reflect.Type
+	ReplyType reflect.Type
 	// numCalls   uint
 	serviceName string
 }
 
 type functionType struct {
 	sync.Mutex // protects counters
-	fn         reflect.Value
-	ArgType    reflect.Type
-	ReplyType  reflect.Type
+	fn        reflect.Value
+	ArgType   reflect.Type
+	ReplyType reflect.Type
 }
 
 type service struct {
@@ -314,7 +314,7 @@ func suitableMethods(typ reflect.Type, reportErr bool) map[string]*methodType {
 			}
 			continue
 		}
-		methods[mname] = &methodType{method: method, ArgType: argType, ReplyType: replyType,serviceName:typ.Elem().Name()}
+		methods[mname] = &methodType{method: method, ArgType: argType, ReplyType: replyType, serviceName: typ.Elem().Name()}
 
 		argsReplyPools.Init(argType)
 		argsReplyPools.Init(replyType)
@@ -353,7 +353,7 @@ func (s *service) call(ctx context.Context, mtype *methodType, argv, replyv refl
 	function := mtype.method.Func
 	// Invoke the method, providing a new value for the reply.
 	returnValues := function.Call([]reflect.Value{s.rcvr, reflect.ValueOf(ctx), argv, replyv})
-	if OnCallBackFunc.IsValid(){
+	if OnCallBackFunc.IsValid() {
 		OnCallBackFunc.Call([]reflect.Value{reflect.ValueOf(mtype.serviceName), reflect.ValueOf(mtype.method.Name), argv, replyv})
 	}
 	// The return value for the method is an error.
@@ -368,7 +368,17 @@ func (s *service) call(ctx context.Context, mtype *methodType, argv, replyv refl
 func (s *service) callForFunction(ctx context.Context, ft *functionType, argv, replyv reflect.Value) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("[service internal error]: %v", r)
+			buf := make([]byte, 1024)
+			for {
+				n := runtime.Stack(buf, false)
+				if n < len(buf) {
+					buf = buf[:n]
+					break
+				}
+				buf = make([]byte, 2*len(buf))
+			}
+			stack := string(buf)
+			err = fmt.Errorf("[service internal error]: %v \n %v", r, stack)
 		}
 	}()
 
